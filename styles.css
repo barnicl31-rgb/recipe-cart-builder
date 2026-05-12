@@ -1,0 +1,188 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, Arial, sans-serif;
+  color: #1f2933;
+  background: linear-gradient(145deg, #fff7e8 0%, #edf7f3 54%, #f7f5ef 100%);
+}
+
+body {
+  width: 360px;
+  margin: 0;
+  background: linear-gradient(145deg, #fff7e8 0%, #edf7f3 54%, #f7f5ef 100%);
+}
+
+.popup {
+  padding: 18px;
+}
+
+header {
+  margin-bottom: 14px;
+}
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+h2 {
+  margin: 14px 0 8px;
+  font-size: 16px;
+}
+
+p {
+  margin: 0;
+  color: #52606d;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+button {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: linear-gradient(135deg, #256f5c, #2f8c6e);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(37, 111, 92, 0.18);
+}
+
+button:hover {
+  background: linear-gradient(135deg, #1d5b4b, #277b61);
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.status {
+  min-height: 20px;
+  margin-top: 12px;
+  color: #7c4a03;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.results {
+  margin-top: 6px;
+}
+
+.recipe-yield {
+  margin-bottom: 10px;
+}
+
+.checklist-actions {
+  margin-bottom: 10px;
+}
+
+.secondary-button {
+  padding: 8px 10px;
+  border: 1px solid #b9c8c1;
+  background: linear-gradient(135deg, #ffffff, #edf7f3);
+  color: #256f5c;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.secondary-button:hover {
+  background: linear-gradient(135deg, #f7fffb, #e1f1eb);
+}
+
+.basket-button {
+  margin-top: 12px;
+}
+
+.ingredient-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ingredient-list li {
+  overflow: hidden;
+  border: 1px solid rgba(185, 200, 193, 0.8);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fffdfa 0%, #f0faf5 100%);
+  box-shadow: 0 7px 18px rgba(31, 41, 51, 0.08);
+}
+
+.ingredient-list label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.ingredient-list input {
+  margin-top: 1px;
+  accent-color: #256f5c;
+}
+
+.basket-results {
+  margin-top: 16px;
+}
+
+.basket-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.basket-list li {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(185, 200, 193, 0.8);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fffdfa 0%, #f0faf5 100%);
+  box-shadow: 0 7px 18px rgba(31, 41, 51, 0.08);
+}
+
+.basket-list strong {
+  font-size: 13px;
+}
+
+.basket-list span,
+.basket-list a {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.basket-list span {
+  color: #52606d;
+}
+
+.basket-list a {
+  color: #256f5c;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.basket-list a:hover {
+  text-decoration: underline;
+}
+
+pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(185, 200, 193, 0.8);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fffdfa 0%, #f0faf5 100%);
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 7px 18px rgba(31, 41, 51, 0.08);
+}
