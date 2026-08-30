@@ -1,8 +1,17 @@
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const {
+  buildInstamartCart,
+  createInstamartToolPlan,
+  isSwiggyConfigured
+} = require("./swiggyMcpClient");
 
 const port = Number(process.env.PORT || 3000);
+const learningStorePath = path.join(__dirname, "learning-store.json");
 let lastNormalizedIngredients = [];
 let lastSuggestedBasket = [];
+let learningStore = loadLearningStore();
 
 const server = http.createServer(async (request, response) => {
   setCorsHeaders(response);
@@ -18,6 +27,11 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (request.method === "GET" && request.url === "/admin/learning") {
+    sendHtml(response, 200, renderLearningAdminPage());
+    return;
+  }
+
   if (request.method === "GET" && request.url === "/health") {
     sendJson(response, 200, { ok: true });
     return;
@@ -30,6 +44,20 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && request.url === "/api/last-basket") {
     sendJson(response, 200, lastSuggestedBasket);
+    return;
+  }
+
+  if (request.method === "GET" && request.url === "/api/learned-mappings") {
+    sendJson(response, 200, learningStore);
+    return;
+  }
+
+  if (request.method === "GET" && request.url === "/api/swiggy/status") {
+    sendJson(response, 200, {
+      configured: isSwiggyConfigured(),
+      endpoint: process.env.SWIGGY_MCP_ENDPOINT || "https://mcp.swiggy.com/im",
+      note: "Set SWIGGY_TOKEN or SWIGGY_ACCESS_TOKEN to enable live Instamart MCP calls."
+    });
     return;
   }
 
@@ -61,6 +89,50 @@ const server = http.createServer(async (request, response) => {
 
     lastSuggestedBasket = basket;
     sendJson(response, 200, basket);
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/swiggy/plan-cart") {
+    const body = await readJsonBody(request);
+    const ingredients = Array.isArray(body?.ingredients) ? body.ingredients : [];
+
+    sendJson(response, 200, createInstamartToolPlan(ingredients));
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/swiggy/build-cart") {
+    const body = await readJsonBody(request);
+    const ingredients = Array.isArray(body?.ingredients) ? body.ingredients : [];
+
+    if (!isSwiggyConfigured()) {
+      sendJson(response, 428, {
+        success: false,
+        configured: false,
+        message: "Swiggy MCP is not configured. Set SWIGGY_TOKEN or SWIGGY_ACCESS_TOKEN, then restart the backend.",
+        plan: createInstamartToolPlan(ingredients)
+      });
+      return;
+    }
+
+    try {
+      const cartResult = await buildInstamartCart(ingredients);
+      sendJson(response, cartResult.success ? 200 : 422, cartResult);
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        success: false,
+        message: error.message,
+        detail: error.body || null
+      });
+    }
+
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/learn-ingredient") {
+    const body = await readJsonBody(request);
+    const learnedMapping = learnIngredientMapping(body);
+
+    sendJson(response, learnedMapping ? 200 : 400, learnedMapping || { error: "Missing ingredient or search term" });
     return;
   }
 
@@ -147,6 +219,151 @@ function renderDebugPage() {
 </html>`;
 }
 
+function renderLearningAdminPage() {
+  const mappingsJson = JSON.stringify(learningStore.mappings, null, 2);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recipe Basket Builder Learning Admin</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #f7f5ef;
+        color: #1f2933;
+        font-family: Arial, sans-serif;
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: #52606d;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid #d9d2c2;
+        border-radius: 12px;
+        background: #fffdfa;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-weight: 700;
+      }
+
+      input {
+        border: 1px solid #b9c8c1;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 14px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 11px 14px;
+        background: #256f5c;
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      pre {
+        overflow: auto;
+        margin-top: 18px;
+        padding: 16px;
+        border: 1px solid #d9d2c2;
+        border-radius: 12px;
+        background: #fffdfa;
+        line-height: 1.45;
+      }
+
+      .status {
+        min-height: 20px;
+        margin-top: 12px;
+        color: #256f5c;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Learning Admin</h1>
+      <p>Add backend keyword mappings here. These mappings improve future ingredient normalization without cluttering the extension popup.</p>
+
+      <form id="learningForm">
+        <label>
+          Ingredient phrase
+          <input id="original" type="text" placeholder="Example: 500 g lamb mince ((ground lamb, or beef))" required>
+        </label>
+        <label>
+          Grocery search term
+          <input id="searchTerm" type="text" placeholder="Example: lamb mince" required>
+        </label>
+        <button type="submit">Save mapping</button>
+      </form>
+
+      <div id="status" class="status" aria-live="polite"></div>
+
+      <h2>Current mappings</h2>
+      <pre id="mappings">${escapeHtml(mappingsJson)}</pre>
+    </main>
+
+    <script>
+      const form = document.getElementById("learningForm");
+      const statusElement = document.getElementById("status");
+      const mappingsElement = document.getElementById("mappings");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const response = await fetch("/api/learn-ingredient", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            original: document.getElementById("original").value,
+            grocery_search_term: document.getElementById("searchTerm").value
+          })
+        });
+
+        if (!response.ok) {
+          statusElement.textContent = "Could not save mapping.";
+          return;
+        }
+
+        statusElement.textContent = "Mapping saved.";
+        form.reset();
+        await refreshMappings();
+      });
+
+      async function refreshMappings() {
+        const response = await fetch("/api/learned-mappings");
+        const mappings = await response.json();
+        mappingsElement.textContent = JSON.stringify(mappings.mappings, null, 2);
+      }
+    </script>
+  </body>
+</html>`;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -176,6 +393,61 @@ function readJsonBody(request) {
       resolve({});
     });
   });
+}
+
+function loadLearningStore() {
+  try {
+    const savedLearningStore = fs.readFileSync(learningStorePath, "utf8");
+    const parsedLearningStore = JSON.parse(savedLearningStore);
+
+    return {
+      mappings: Array.isArray(parsedLearningStore.mappings) ? parsedLearningStore.mappings : []
+    };
+  } catch (error) {
+    return { mappings: [] };
+  }
+}
+
+function saveLearningStore() {
+  fs.writeFileSync(learningStorePath, JSON.stringify(learningStore, null, 2));
+}
+
+function learnIngredientMapping(body) {
+  const originalIngredient = String(body?.original || "").trim();
+  const searchTerm = cleanItemName(body?.grocery_search_term || body?.search_term || "");
+
+  if (!originalIngredient || !searchTerm) {
+    return null;
+  }
+
+  const rawItem = cleanItemName(removeParentheticalText(normalizeText(originalIngredient)));
+  const ingredientKey = createLearningKey(rawItem || originalIngredient);
+  const now = new Date().toISOString();
+  const existingMapping = learningStore.mappings.find((mapping) => {
+    return mapping.ingredient_key === ingredientKey;
+  });
+
+  if (existingMapping) {
+    existingMapping.grocery_search_term = searchTerm;
+    existingMapping.times_confirmed += 1;
+    existingMapping.updated_at = now;
+    saveLearningStore();
+    return existingMapping;
+  }
+
+  const mapping = {
+    ingredient_key: ingredientKey,
+    example_original: originalIngredient,
+    normalized_item: rawItem,
+    grocery_search_term: searchTerm,
+    times_confirmed: 1,
+    created_at: now,
+    updated_at: now
+  };
+
+  learningStore.mappings.push(mapping);
+  saveLearningStore();
+  return mapping;
 }
 
 function normalizeIngredient(originalIngredient) {
@@ -342,6 +614,12 @@ function normalizeText(value) {
 
 function findBestGrocerySearchTerm(item) {
   const normalizedItem = normalizeText(item);
+  const learnedMatch = findLearnedGrocerySearchTerm(normalizedItem);
+
+  if (learnedMatch) {
+    return learnedMatch;
+  }
+
   const directMatch = groceryCatalog.find((product) => product.term === normalizedItem);
 
   if (directMatch) {
@@ -365,6 +643,31 @@ function findBestGrocerySearchTerm(item) {
   }
 
   return normalizedItem;
+}
+
+function findLearnedGrocerySearchTerm(item) {
+  const itemKey = createLearningKey(item);
+  const exactMatch = learningStore.mappings.find((mapping) => mapping.ingredient_key === itemKey);
+
+  if (exactMatch) {
+    return exactMatch.grocery_search_term;
+  }
+
+  const phraseMatch = learningStore.mappings
+    .slice()
+    .sort((left, right) => right.ingredient_key.length - left.ingredient_key.length)
+    .find((mapping) => {
+      return containsPhrase(itemKey, mapping.ingredient_key) || containsPhrase(mapping.ingredient_key, itemKey);
+    });
+
+  return phraseMatch?.grocery_search_term || null;
+}
+
+function createLearningKey(value) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function containsPhrase(value, phrase) {

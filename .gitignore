@@ -1,0 +1,6 @@
+learning-store.json
+.env
+*.log
+node_modules/
+.vercel/
+.DS_Store

@@ -19,6 +19,50 @@ header {
   margin-bottom: 14px;
 }
 
+.connection-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 11px;
+  border: 1px solid rgba(185, 200, 193, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.74);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.connection-bar > div {
+  min-width: 0;
+}
+
+.connection-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #9aa5b1;
+}
+
+.connection-dot.connected {
+  background: #2f8c6e;
+}
+
+.connection-dot.disconnected {
+  background: #c56a23;
+}
+
+.compact-button {
+  width: auto;
+  min-width: 76px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
 h1 {
   margin: 0 0 6px;
   font-size: 20px;
@@ -96,6 +140,87 @@ button:disabled {
   margin-top: 12px;
 }
 
+.product-review {
+  margin-top: 16px;
+}
+
+.field-label {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  color: #334e45;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+select,
+input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b9c8c1;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #ffffff;
+  color: #1f2933;
+  font: inherit;
+}
+
+.product-choice-list {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-choice-list li {
+  padding: 11px;
+  border: 1px solid rgba(185, 200, 193, 0.8);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fffdfa 0%, #f0faf5 100%);
+}
+
+.product-choice-list strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.product-choice-list small {
+  display: block;
+  margin-bottom: 8px;
+  color: #52606d;
+  line-height: 1.35;
+}
+
+.choice-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 8px;
+}
+
+.empty-choice {
+  color: #9b3f2f;
+}
+
+.cart-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+details {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+summary {
+  cursor: pointer;
+  color: #256f5c;
+  font-weight: 700;
+}
+
 .ingredient-list {
   display: grid;
   gap: 10px;
@@ -126,7 +251,8 @@ button:disabled {
   accent-color: #256f5c;
 }
 
-.basket-results {
+.basket-results,
+.swiggy-result {
   margin-top: 16px;
 }
 

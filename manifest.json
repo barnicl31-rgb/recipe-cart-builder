@@ -1,16 +1,22 @@
 {
   "manifest_version": 3,
   "name": "Recipe Basket Builder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Extract recipe ingredients from pages and prepare them for grocery basket building.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
-    "https://www.swiggy.com/*"
+    "https://recipe-basket-builder.vercel.app/*"
   ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Recipe Basket Builder"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["auth-complete.html", "auth-complete.css", "auth-complete.js"],
+      "matches": ["https://recipe-basket-builder.vercel.app/*"]
+    }
+  ]
 }

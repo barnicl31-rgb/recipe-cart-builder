@@ -1,11 +1,32 @@
 const extractButton = document.getElementById("extractButton");
+const connectSwiggyButton = document.getElementById("connectSwiggyButton");
+const disconnectSwiggyButton = document.getElementById("disconnectSwiggyButton");
+const swiggyConnectionDot = document.getElementById("swiggyConnectionDot");
+const swiggyConnectionText = document.getElementById("swiggyConnectionText");
 const statusElement = document.getElementById("status");
 const resultsElement = document.getElementById("results");
 
-const API_BASE_URLS = [
+const LOCAL_API_BASE_URLS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000"
 ];
+const SWIGGY_API_BASE_URL = "https://recipe-basket-builder.vercel.app";
+const INSTAMART_URL = "https://www.swiggy.com/instamart";
+
+let swiggyConnected = false;
+
+refreshSwiggyStatus();
+
+connectSwiggyButton.addEventListener("click", async () => {
+  const connectUrl = `${SWIGGY_API_BASE_URL}/api/swiggy/connect?extension_id=${encodeURIComponent(chrome.runtime.id)}`;
+  await chrome.tabs.create({ url: connectUrl });
+});
+
+disconnectSwiggyButton.addEventListener("click", async () => {
+  await chrome.storage.local.remove("swiggySession");
+  setSwiggyConnection(false, "Swiggy not connected");
+  setStatus("Swiggy was disconnected from this extension.");
+});
 
 extractButton.addEventListener("click", async () => {
   setLoading(true);
@@ -24,8 +45,7 @@ extractButton.addEventListener("click", async () => {
       files: ["content.js"]
     });
 
-    const extractedData = injectionResult?.result;
-    await renderExtractedData(extractedData);
+    await renderExtractedData(injectionResult?.result);
   } catch (error) {
     console.error(error);
     setStatus("Could not scan this page. Try another recipe page.");
@@ -33,6 +53,31 @@ extractButton.addEventListener("click", async () => {
     setLoading(false);
   }
 });
+
+async function refreshSwiggyStatus() {
+  const session = await getSwiggySession();
+
+  if (!session) {
+    setSwiggyConnection(false, "Swiggy not connected");
+    return;
+  }
+
+  try {
+    const result = await swiggyFetch("/api/swiggy/status");
+    setSwiggyConnection(Boolean(result.connected), result.connected ? "Swiggy connected" : "Swiggy not connected");
+  } catch (error) {
+    setSwiggyConnection(false, "Reconnect Swiggy");
+  }
+}
+
+function setSwiggyConnection(connected, message) {
+  swiggyConnected = connected;
+  swiggyConnectionText.textContent = message;
+  swiggyConnectionDot.classList.toggle("connected", connected);
+  swiggyConnectionDot.classList.toggle("disconnected", !connected);
+  connectSwiggyButton.hidden = connected;
+  disconnectSwiggyButton.hidden = !connected;
+}
 
 async function renderExtractedData(data) {
   if (!data) {
@@ -57,13 +102,11 @@ async function renderExtractedData(data) {
 }
 
 async function normalizeIngredients(ingredients) {
-  for (const apiBaseUrl of API_BASE_URLS) {
+  for (const apiBaseUrl of LOCAL_API_BASE_URLS) {
     try {
       const response = await fetch(`${apiBaseUrl}/api/normalize-ingredients`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ingredients })
       });
 
@@ -75,14 +118,14 @@ async function normalizeIngredients(ingredients) {
     }
   }
 
-  setStatus("Ingredients extracted. Start or restart the backend to see cleaned grocery terms.");
+  setStatus("Ingredients extracted. Start or restart the local backend to see cleaned grocery terms.");
   return null;
 }
 
 function renderRecipe(recipe, normalizedIngredients) {
+  const normalizedList = normalizedIngredients || [];
   const title = document.createElement("h2");
   title.textContent = recipe.name || "Recipe found";
-
   resultsElement.appendChild(title);
 
   if (recipe.yield) {
@@ -96,21 +139,20 @@ function renderRecipe(recipe, normalizedIngredients) {
   list.className = "ingredient-list";
 
   recipe.ingredients.forEach((ingredient, index) => {
-    const normalized = normalizedIngredients?.[index];
-    const label = document.createElement("label");
+    const normalized = normalizedList[index];
     const checkbox = document.createElement("input");
     const text = document.createElement("span");
+    const label = document.createElement("label");
+    const item = document.createElement("li");
 
     checkbox.type = "checkbox";
+    checkbox.checked = true;
     checkbox.dataset.index = String(index);
     text.textContent = normalized
       ? `${ingredient} (${normalized.grocery_search_term})`
       : ingredient;
 
-    label.appendChild(checkbox);
-    label.appendChild(text);
-
-    const item = document.createElement("li");
+    label.append(checkbox, text);
     item.appendChild(label);
     list.appendChild(item);
   });
@@ -122,16 +164,34 @@ function renderRecipe(recipe, normalizedIngredients) {
   resultsElement.appendChild(list);
 
   if (recipe.ingredients.length > 0) {
-    resultsElement.appendChild(createBasketButton(list, recipe, normalizedIngredients));
+    resultsElement.appendChild(createBasketButton(list, recipe, normalizedList));
   }
+}
+
+function createChecklistActions(list) {
+  const actions = document.createElement("div");
+  const toggleButton = document.createElement("button");
+
+  actions.className = "checklist-actions";
+  toggleButton.type = "button";
+  toggleButton.className = "secondary-button";
+  updateChecklistToggleButton(list, toggleButton);
+
+  toggleButton.addEventListener("click", () => {
+    setAllCheckboxes(list, !areAllCheckboxesChecked(list));
+    updateChecklistToggleButton(list, toggleButton);
+  });
+  list.addEventListener("change", () => updateChecklistToggleButton(list, toggleButton));
+  actions.appendChild(toggleButton);
+  return actions;
 }
 
 function createBasketButton(list, recipe, normalizedIngredients) {
   const button = document.createElement("button");
-
   button.type = "button";
   button.className = "basket-button";
   button.textContent = "Build Basket";
+
   button.addEventListener("click", async () => {
     const checkedIngredients = getCheckedIngredients(list, recipe, normalizedIngredients);
 
@@ -140,22 +200,227 @@ function createBasketButton(list, recipe, normalizedIngredients) {
       return;
     }
 
-    await openSwiggyInstamart(checkedIngredients);
-    setStatus("Opened Swiggy Instamart and started the add-to-basket helper. Review the basket before checkout.");
+    if (!swiggyConnected) {
+      setStatus("Connect Swiggy first, then click Build Basket again.");
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Finding products...";
+    setStatus("Loading your saved Swiggy addresses...");
+
+    try {
+      const addressResult = await swiggyFetch("/api/swiggy/addresses");
+      const addresses = addressResult.addresses || [];
+
+      if (!addresses.length) {
+        throw new Error("No saved Swiggy address was found. Add an address in Swiggy and try again.");
+      }
+
+      const selectedAddress = addresses.find((address) => address.label.toLowerCase() === "home") || addresses[0];
+      await searchAndRenderProducts(checkedIngredients, addresses, selectedAddress.id);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Build Basket";
+    }
   });
 
   return button;
 }
 
-function getCheckedIngredients(list, recipe, normalizedIngredients) {
-  const checkedBoxes = Array.from(list.querySelectorAll('input[type="checkbox"]:checked'));
+async function searchAndRenderProducts(ingredients, addresses, addressId) {
+  setStatus("Searching Instamart for each selected ingredient...");
+  const searchResult = await swiggyFetch("/api/swiggy/search-products", {
+    method: "POST",
+    body: JSON.stringify({ addressId, ingredients })
+  });
 
-  return checkedBoxes.map((checkbox) => {
+  renderProductReview(searchResult.matches || [], addresses, addressId, ingredients);
+  setStatus("Review the suggested products before adding them to the Instamart cart.");
+}
+
+function renderProductReview(matches, addresses, addressId, ingredients) {
+  resultsElement.querySelector(".product-review")?.remove();
+  resultsElement.querySelector(".swiggy-result")?.remove();
+
+  const section = document.createElement("section");
+  const title = document.createElement("h2");
+  const addressLabel = document.createElement("label");
+  const addressSelect = document.createElement("select");
+  const choiceList = document.createElement("ul");
+  const addButton = document.createElement("button");
+
+  section.className = "product-review";
+  title.textContent = "Choose Instamart products";
+  addressLabel.className = "field-label";
+  addressLabel.append("Delivery address", addressSelect);
+  choiceList.className = "product-choice-list";
+  addButton.type = "button";
+  addButton.className = "basket-button";
+  addButton.textContent = "Add selected products";
+
+  addresses.forEach((address) => {
+    const option = document.createElement("option");
+    option.value = address.id;
+    option.textContent = `${address.label}: ${address.display}`;
+    option.selected = address.id === addressId;
+    addressSelect.appendChild(option);
+  });
+
+  addressSelect.addEventListener("change", async () => {
+    addressSelect.disabled = true;
+
+    try {
+      await searchAndRenderProducts(ingredients, addresses, addressSelect.value);
+    } catch (error) {
+      setStatus(error.message);
+      addressSelect.disabled = false;
+    }
+  });
+
+  matches.forEach((match, index) => {
+    const item = document.createElement("li");
+    const ingredientName = document.createElement("strong");
+    const queryText = document.createElement("small");
+    const controls = document.createElement("div");
+    const productSelect = document.createElement("select");
+    const quantityInput = document.createElement("input");
+
+    ingredientName.textContent = match.ingredient;
+    queryText.textContent = `Search: ${match.query}`;
+    controls.className = "choice-controls";
+    productSelect.dataset.matchIndex = String(index);
+    quantityInput.type = "number";
+    quantityInput.min = "1";
+    quantityInput.max = "20";
+    quantityInput.value = "1";
+    quantityInput.setAttribute("aria-label", `Quantity for ${match.query}`);
+
+    const skipOption = document.createElement("option");
+    skipOption.value = "";
+    skipOption.textContent = match.choices.length ? "Skip this ingredient" : "No matching product found";
+    productSelect.appendChild(skipOption);
+
+    match.choices.forEach((choice, choiceIndex) => {
+      const option = document.createElement("option");
+      option.value = String(choiceIndex);
+      option.textContent = formatProductChoice(choice);
+      option.selected = choiceIndex === 0;
+      productSelect.appendChild(option);
+    });
+
+    if (!match.choices.length) {
+      item.classList.add("empty-choice");
+      productSelect.disabled = true;
+      quantityInput.disabled = true;
+    }
+
+    controls.append(productSelect, quantityInput);
+    item.append(ingredientName, queryText, controls);
+    choiceList.appendChild(item);
+  });
+
+  addButton.addEventListener("click", async () => {
+    const items = Array.from(choiceList.querySelectorAll("select[data-match-index]")).flatMap((select) => {
+      if (select.value === "") {
+        return [];
+      }
+
+      const match = matches[Number(select.dataset.matchIndex)];
+      const choice = match.choices[Number(select.value)];
+      const quantityInput = select.parentElement.querySelector('input[type="number"]');
+
+      return [{
+        spinId: choice.spinId,
+        skuId: choice.skuId,
+        quantity: Number(quantityInput.value) || 1
+      }];
+    });
+
+    if (!items.length) {
+      setStatus("Choose at least one product before updating the cart.");
+      return;
+    }
+
+    addButton.disabled = true;
+    addButton.textContent = "Updating cart...";
+
+    try {
+      const result = await swiggyFetch("/api/swiggy/update-cart", {
+        method: "POST",
+        body: JSON.stringify({
+          selectedAddressId: addressSelect.value,
+          items
+        })
+      });
+      renderCartResult(result);
+      setStatus("Instamart cart updated. Review it in Swiggy before checkout.");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      addButton.disabled = false;
+      addButton.textContent = "Add selected products";
+    }
+  });
+
+  section.append(title, addressLabel, choiceList, addButton);
+  resultsElement.appendChild(section);
+}
+
+function renderCartResult(result) {
+  resultsElement.querySelector(".swiggy-result")?.remove();
+
+  const section = document.createElement("section");
+  const title = document.createElement("h2");
+  const message = document.createElement("p");
+  const actions = document.createElement("div");
+  const reviewButton = document.createElement("button");
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  const cart = document.createElement("pre");
+
+  section.className = "swiggy-result";
+  title.textContent = "Instamart cart ready";
+  message.textContent = result.message || "Your selected products were added to the cart.";
+  actions.className = "cart-actions";
+  reviewButton.type = "button";
+  reviewButton.textContent = "Review cart in Swiggy";
+  reviewButton.addEventListener("click", () => chrome.tabs.create({ url: INSTAMART_URL }));
+  summary.textContent = "View returned cart details";
+  cart.textContent = JSON.stringify(result.cart || {}, null, 2);
+
+  details.append(summary, cart);
+  actions.appendChild(reviewButton);
+  section.append(title, message, actions, details);
+  resultsElement.appendChild(section);
+}
+
+function formatProductChoice(choice) {
+  const parts = [choice.productName];
+
+  if (choice.brand) {
+    parts.push(choice.brand);
+  }
+  if (choice.packSize) {
+    parts.push(choice.packSize);
+  }
+  if (choice.price !== null && choice.price !== undefined) {
+    parts.push(`Price ${choice.price}`);
+  }
+  if (choice.similar) {
+    parts.push("Similar item");
+  }
+
+  return parts.join(" - ");
+}
+
+function getCheckedIngredients(list, recipe, normalizedIngredients) {
+  return Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map((checkbox) => {
     const index = Number(checkbox.dataset.index);
     const original = recipe.ingredients[index];
-    const normalized = normalizedIngredients?.[index];
-
-    return normalized || {
+    return normalizedIngredients?.[index] || {
       original,
       item: original,
       quantity: null,
@@ -165,88 +430,49 @@ function getCheckedIngredients(list, recipe, normalizedIngredients) {
   });
 }
 
-async function openSwiggyInstamart(ingredients) {
-  const uniqueSearchTerms = getUniqueSearchTerms(ingredients);
-  const firstSearchTerm = uniqueSearchTerms[0];
-  const tab = await chrome.tabs.create({
-    url: firstSearchTerm
-      ? buildSwiggySearchUrl(firstSearchTerm)
-      : "https://www.swiggy.com/instamart",
-    active: true
-  });
+async function swiggyFetch(path, options = {}) {
+  const session = await getSwiggySession();
 
-  await chrome.storage.local.set({
-    recipeBasketBuilderTerms: uniqueSearchTerms
-  });
+  if (!session) {
+    setSwiggyConnection(false, "Swiggy not connected");
+    throw new Error("Connect Swiggy to continue.");
+  }
 
-  injectSwiggyAutomationWhenReady(tab.id);
-}
-
-function injectSwiggyAutomationWhenReady(tabId) {
-  chrome.tabs.onUpdated.addListener(function listener(updatedTabId, changeInfo) {
-    if (updatedTabId !== tabId || changeInfo.status !== "complete") {
-      return;
+  const response = await fetch(`${SWIGGY_API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Authorization": `RecipeBasket ${session}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
     }
-
-    chrome.tabs.onUpdated.removeListener(listener);
-
-    chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["swiggyAutomation.js"]
-    });
   });
+  const result = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    await chrome.storage.local.remove("swiggySession");
+    setSwiggyConnection(false, "Reconnect Swiggy");
+  }
+
+  if (!response.ok || result.success === false) {
+    throw new Error(result.message || "Swiggy could not complete this request.");
+  }
+
+  return result;
 }
 
-function getUniqueSearchTerms(ingredients) {
-  const searchTerms = ingredients.map((ingredient) => {
-    return ingredient.grocery_search_term || ingredient.item || ingredient.original;
-  });
-
-  return Array.from(new Set(searchTerms.filter(Boolean)));
-}
-
-function buildSwiggySearchUrl(searchTerm) {
-  const query = encodeURIComponent(searchTerm);
-
-  return `https://www.swiggy.com/instamart/search?query=${query}`;
-}
-
-function createChecklistActions(list) {
-  const actions = document.createElement("div");
-  const toggleButton = document.createElement("button");
-
-  actions.className = "checklist-actions";
-
-  toggleButton.type = "button";
-  toggleButton.className = "secondary-button";
-  updateChecklistToggleButton(list, toggleButton);
-
-  toggleButton.addEventListener("click", () => {
-    const shouldSelectAll = !areAllCheckboxesChecked(list);
-    setAllCheckboxes(list, shouldSelectAll);
-    updateChecklistToggleButton(list, toggleButton);
-  });
-
-  list.addEventListener("change", () => {
-    updateChecklistToggleButton(list, toggleButton);
-  });
-
-  actions.appendChild(toggleButton);
-
-  return actions;
+async function getSwiggySession() {
+  const stored = await chrome.storage.local.get("swiggySession");
+  return stored.swiggySession || "";
 }
 
 function setAllCheckboxes(container, isChecked) {
-  const checkboxes = container.querySelectorAll('input[type="checkbox"]');
-
-  checkboxes.forEach((checkbox) => {
+  container.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
     checkbox.checked = isChecked;
   });
 }
 
 function areAllCheckboxesChecked(container) {
   const checkboxes = Array.from(container.querySelectorAll('input[type="checkbox"]'));
-
   return checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
 }
 
@@ -257,12 +483,9 @@ function updateChecklistToggleButton(container, button) {
 function renderSelectedText(text) {
   const title = document.createElement("h2");
   const rawText = document.createElement("pre");
-
   title.textContent = "Selected text found";
   rawText.textContent = text;
-
-  resultsElement.appendChild(title);
-  resultsElement.appendChild(rawText);
+  resultsElement.append(title, rawText);
 }
 
 function setStatus(message) {

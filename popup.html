@@ -13,6 +13,15 @@
         <p>Extract ingredients from the active recipe page.</p>
       </header>
 
+      <section class="connection-bar" aria-label="Swiggy connection">
+        <div>
+          <span id="swiggyConnectionDot" class="connection-dot" aria-hidden="true"></span>
+          <span id="swiggyConnectionText">Checking Swiggy...</span>
+        </div>
+        <button id="connectSwiggyButton" class="compact-button" type="button">Connect</button>
+        <button id="disconnectSwiggyButton" class="compact-button secondary-button" type="button" hidden>Disconnect</button>
+      </section>
+
       <button id="extractButton" type="button">Extract Ingredients</button>
 
       <section id="status" class="status" aria-live="polite"></section>
