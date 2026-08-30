@@ -64,10 +64,10 @@ module.exports = async function authCallback(request, response) {
     }
 
     const sealedSession = createSwiggySession(tokens, pending.extensionId);
-    const extensionUrl = `chrome-extension://${pending.extensionId}/auth-complete.html#session=${encodeURIComponent(sealedSession)}`;
+    const extensionUrl = `https://${pending.extensionId}.chromiumapp.org/swiggy#session=${encodeURIComponent(sealedSession)}`;
 
     clearPendingCookie(response);
-    sendConnectedPage(response, extensionUrl);
+    redirectToExtension(response, extensionUrl);
   } catch (error) {
     console.error("Could not complete Swiggy OAuth:", error.message);
     clearPendingCookie(response);
@@ -89,32 +89,10 @@ function clearPendingCookie(response) {
   }));
 }
 
-function sendConnectedPage(response, extensionUrl) {
-  response.statusCode = 200;
-  response.setHeader("Content-Type", "text/html; charset=utf-8");
-  response.end(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Swiggy connected</title>
-    <style>
-      * { box-sizing: border-box; }
-      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; background: #f7f8f5; color: #17202a; font-family: Arial, sans-serif; }
-      main { width: min(100%, 560px); padding: 32px; border: 1px solid #dce6df; border-radius: 14px; background: #fff; box-shadow: 0 18px 50px rgba(23,32,42,.12); }
-      h1 { margin: 0 0 12px; font-size: 26px; }
-      p { margin: 0 0 22px; color: #52606d; line-height: 1.6; }
-      a { display: inline-block; padding: 12px 16px; border-radius: 8px; background: #256f5c; color: #fff; font-weight: 700; text-decoration: none; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Swiggy is connected</h1>
-      <p>Finish the secure handoff to Recipe Basket Builder, then reopen the extension to build your Instamart basket.</p>
-      <a href="${escapeHtml(extensionUrl)}">Return to Recipe Basket Builder</a>
-    </main>
-  </body>
-</html>`);
+function redirectToExtension(response, extensionUrl) {
+  response.statusCode = 302;
+  response.setHeader("Location", extensionUrl);
+  response.end();
 }
 
 function sendPage(response, statusCode, title, message) {

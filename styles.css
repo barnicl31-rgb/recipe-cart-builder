@@ -5,6 +5,10 @@
   background: linear-gradient(145deg, #fff7e8 0%, #edf7f3 54%, #f7f5ef 100%);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   width: 360px;
   margin: 0;

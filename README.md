@@ -7,12 +7,12 @@ Recipe Basket Builder is an MVP Chrome extension and local backend for convertin
 - `manifest.json` - Chrome extension configuration.
 - `popup.html` - Popup UI.
 - `popup.js` - Popup behavior, checklist controls, and Swiggy basket review.
+- `background.js` - persistent Chrome identity handoff for Swiggy authentication.
 - `content.js` - Page scanner for JSON-LD recipe data or selected text.
 - `styles.css` - Popup styling.
 - `server.js` - Local API for ingredient normalization and learning.
 - `lib/swiggyMcp.js` - authenticated Swiggy Instamart MCP client using the official SDK.
 - `api/swiggy/` - production OAuth, product search, and cart endpoints deployed on Vercel.
-- `auth-complete.html` - secure handoff from the production callback to the extension.
 
 ## Load the Extension
 
@@ -100,7 +100,7 @@ Example:
 
 ## Swiggy MCP Flow
 
-Click **Connect** in the extension and complete Swiggy phone-and-OTP authentication. The production callback exchanges the authorization code and returns an encrypted session envelope to the extension; the raw Swiggy access token is never placed in extension storage.
+Click **Connect** in the extension and complete Swiggy phone-and-OTP authentication. Chrome's identity flow returns the production callback result directly to the extension, where an encrypted session envelope is saved; the raw Swiggy access token is never placed in extension storage.
 
 The live basket journey is:
 

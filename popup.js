@@ -18,8 +18,25 @@ let swiggyConnected = false;
 refreshSwiggyStatus();
 
 connectSwiggyButton.addEventListener("click", async () => {
-  const connectUrl = `${SWIGGY_API_BASE_URL}/api/swiggy/connect?extension_id=${encodeURIComponent(chrome.runtime.id)}`;
-  await chrome.tabs.create({ url: connectUrl });
+  connectSwiggyButton.disabled = true;
+  swiggyConnectionText.textContent = "Opening Swiggy sign-in...";
+
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "connectSwiggy" });
+
+    if (!result?.success) {
+      throw new Error(result?.message || "Swiggy connection was not completed.");
+    }
+
+    setSwiggyConnection(true, "Swiggy connected");
+    setStatus("Swiggy connected successfully.");
+  } catch (error) {
+    console.error("Could not connect Swiggy:", error);
+    setSwiggyConnection(false, "Swiggy not connected");
+    setStatus("Swiggy connection was not completed. Please try again.");
+  } finally {
+    connectSwiggyButton.disabled = false;
+  }
 });
 
 disconnectSwiggyButton.addEventListener("click", async () => {
