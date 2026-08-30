@@ -306,12 +306,15 @@ function renderProductReview(matches, addresses, addressId, ingredients) {
     const item = document.createElement("li");
     const ingredientName = document.createElement("strong");
     const queryText = document.createElement("small");
+    const reasonText = document.createElement("small");
     const controls = document.createElement("div");
     const productSelect = document.createElement("select");
     const quantityInput = document.createElement("input");
 
     ingredientName.textContent = match.ingredient;
     queryText.textContent = `Search: ${match.query}`;
+    reasonText.className = "match-reason";
+    reasonText.textContent = match.reason || "";
     controls.className = "choice-controls";
     productSelect.dataset.matchIndex = String(index);
     quantityInput.type = "number";
@@ -340,7 +343,13 @@ function renderProductReview(matches, addresses, addressId, ingredients) {
     }
 
     controls.append(productSelect, quantityInput);
-    item.append(ingredientName, queryText, controls);
+    item.append(ingredientName, queryText);
+
+    if (reasonText.textContent) {
+      item.appendChild(reasonText);
+    }
+
+    item.appendChild(controls);
     choiceList.appendChild(item);
   });
 

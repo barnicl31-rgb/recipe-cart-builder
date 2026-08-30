@@ -26,8 +26,16 @@ module.exports = async function getAddresses(request, response) {
 function summarizeAddress(address) {
   return {
     id: String(address.id || address.addressId || ""),
-    label: String(address.label || address.name || address.type || "Saved address"),
+    label: String(
+      address.addressTag ||
+      address.addressCategory ||
+      address.label ||
+      address.name ||
+      address.type ||
+      "Saved address"
+    ),
     display: String(
+      address.addressLine ||
       address.displayAddress ||
       address.formattedAddress ||
       address.address ||

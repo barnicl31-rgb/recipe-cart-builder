@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { extractProductChoices } = require("../lib/swiggyMcp");
+const { extractProductChoices, normalizeToolResult } = require("../lib/swiggyMcp");
 
 test("Swiggy product variations retain live SKU identifiers and nested prices", () => {
   const choices = extractProductChoices({
@@ -42,4 +42,54 @@ test("Swiggy product variations retain live SKU identifiers and nested prices", 
   assert.equal(choices.products[0].productId, "product-1");
   assert.equal(choices.products[0].price, 350);
   assert.equal(choices.products[0].maxQuantity, 4);
+  assert.equal(choices.unavailableProducts.length, 1);
+  assert.equal(choices.unavailableProducts[0].spinId, "spin-2");
+});
+
+test("Swiggy result parser prefers the payload containing live products", () => {
+  const result = normalizeToolResult({
+    structuredContent: {
+      success: true,
+      data: { products: [] }
+    },
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        success: true,
+        data: {
+          products: [{
+            displayName: "Olive Oil",
+            variations: [{ spinId: "spin-live", skuId: "sku-live" }]
+          }]
+        }
+      })
+    }]
+  });
+
+  const choices = extractProductChoices(result);
+
+  assert.equal(choices.products.length, 1);
+  assert.equal(choices.products[0].spinId, "spin-live");
+});
+
+test("Swiggy product parser explains unavailable variations separately", () => {
+  const choices = extractProductChoices({
+    success: true,
+    data: {
+      products: [{
+        displayName: "Cream",
+        inStock: true,
+        isAvail: true,
+        variations: [{
+          spinId: "spin-cream",
+          skuId: "sku-cream",
+          isInStockAndAvailable: false
+        }]
+      }]
+    }
+  });
+
+  assert.equal(choices.products.length, 0);
+  assert.equal(choices.unavailableProducts.length, 1);
+  assert.equal(choices.unavailableProducts[0].productName, "Cream");
 });

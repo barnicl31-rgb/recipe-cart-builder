@@ -44,6 +44,8 @@ module.exports = async function searchProducts(request, response) {
         let allChoices = [];
         let similarFallback = [];
         let similarFallbackQuery = queries[0];
+        let unavailableCount = 0;
+        let swiggyMessage = "";
 
         for (const query of queries) {
           const result = await instamart.callTool("search_products", {
@@ -51,6 +53,8 @@ module.exports = async function searchProducts(request, response) {
             query: query.slice(0, 120)
           });
           const choices = extractProductChoices(result);
+          unavailableCount += choices.unavailableProducts.length;
+          swiggyMessage ||= choices.message;
 
           if (!similarFallback.length && choices.similarProducts.length) {
             similarFallback = rankProductChoices(choices.similarProducts, query);
@@ -76,7 +80,8 @@ module.exports = async function searchProducts(request, response) {
           ingredient: ingredient.original || ingredient.item || queries[0],
           query: selectedQuery,
           attemptedQueries: queries,
-          choices: deduplicateChoices(allChoices).slice(0, 12)
+          choices: deduplicateChoices(allChoices).slice(0, 12),
+          reason: allChoices.length ? "" : buildNoMatchReason(unavailableCount, swiggyMessage)
         });
       }
     } finally {
@@ -89,6 +94,14 @@ module.exports = async function searchProducts(request, response) {
     sendJson(response, error.status || 502, { success: false, message: error.message });
   }
 };
+
+function buildNoMatchReason(unavailableCount, swiggyMessage) {
+  if (unavailableCount > 0) {
+    return "Products were found, but none are currently available for this delivery address.";
+  }
+
+  return swiggyMessage || "Swiggy returned no available products for this delivery address.";
+}
 
 function deduplicateChoices(choices) {
   const seen = new Set();
