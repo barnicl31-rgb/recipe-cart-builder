@@ -1,4 +1,5 @@
 const { readJsonBody, sendJson, setExtensionCors } = require("../../lib/http");
+const { buildGrocerySearchQueries, rankProductChoices } = require("../../lib/groceryQuery");
 const { createInstamartClient, extractProductChoices } = require("../../lib/swiggyMcp");
 const { readSwiggySession } = require("../../lib/swiggySession");
 
@@ -33,25 +34,49 @@ module.exports = async function searchProducts(request, response) {
 
     try {
       for (const ingredient of ingredients) {
-        const query = String(ingredient.grocery_search_term || ingredient.item || ingredient.original || "").trim().slice(0, 120);
+        const queries = buildGrocerySearchQueries(ingredient);
 
-        if (!query) {
+        if (!queries.length) {
           continue;
         }
 
-        const result = await instamart.callTool("search_products", {
-          addressId,
-          query
-        });
-        const choices = extractProductChoices(result);
-        const allChoices = [...choices.products, ...choices.similarProducts]
-          .sort((left, right) => sortPrice(left.price) - sortPrice(right.price))
-          .slice(0, 12);
+        let selectedQuery = queries[0];
+        let allChoices = [];
+        let similarFallback = [];
+        let similarFallbackQuery = queries[0];
+
+        for (const query of queries) {
+          const result = await instamart.callTool("search_products", {
+            addressId,
+            query: query.slice(0, 120)
+          });
+          const choices = extractProductChoices(result);
+
+          if (!similarFallback.length && choices.similarProducts.length) {
+            similarFallback = rankProductChoices(choices.similarProducts, query);
+            similarFallbackQuery = query;
+          }
+
+          if (choices.products.length) {
+            selectedQuery = query;
+            allChoices = rankProductChoices(
+              [...choices.products, ...choices.similarProducts],
+              query
+            );
+            break;
+          }
+        }
+
+        if (!allChoices.length) {
+          allChoices = similarFallback;
+          selectedQuery = similarFallbackQuery;
+        }
 
         matches.push({
-          ingredient: ingredient.original || query,
-          query,
-          choices: allChoices
+          ingredient: ingredient.original || ingredient.item || queries[0],
+          query: selectedQuery,
+          attemptedQueries: queries,
+          choices: deduplicateChoices(allChoices).slice(0, 12)
         });
       }
     } finally {
@@ -65,6 +90,17 @@ module.exports = async function searchProducts(request, response) {
   }
 };
 
-function sortPrice(price) {
-  return Number.isFinite(Number(price)) ? Number(price) : Number.MAX_SAFE_INTEGER;
+function deduplicateChoices(choices) {
+  const seen = new Set();
+
+  return choices.filter((choice) => {
+    const key = `${choice.spinId}:${choice.skuId || ""}`;
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }

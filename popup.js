@@ -378,7 +378,8 @@ function renderProductReview(matches, addresses, addressId, ingredients) {
         })
       });
       renderCartResult(result);
-      setStatus("Instamart cart updated. Review it in Swiggy before checkout.");
+      await chrome.tabs.create({ url: INSTAMART_URL });
+      setStatus("Instamart cart updated and opened in one Swiggy tab for review.");
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -397,25 +398,48 @@ function renderCartResult(result) {
   const section = document.createElement("section");
   const title = document.createElement("h2");
   const message = document.createElement("p");
+  const cartSummary = document.createElement("div");
   const actions = document.createElement("div");
   const reviewButton = document.createElement("button");
-  const details = document.createElement("details");
-  const summary = document.createElement("summary");
-  const cart = document.createElement("pre");
+  const cart = result.cart || {};
+  const cartItems = Array.isArray(cart.items) ? cart.items : [];
 
   section.className = "swiggy-result";
   title.textContent = "Instamart cart ready";
   message.textContent = result.message || "Your selected products were added to the cart.";
+  cartSummary.className = "cart-summary";
   actions.className = "cart-actions";
   reviewButton.type = "button";
-  reviewButton.textContent = "Review cart in Swiggy";
+  reviewButton.textContent = "Open Instamart cart";
   reviewButton.addEventListener("click", () => chrome.tabs.create({ url: INSTAMART_URL }));
-  summary.textContent = "View returned cart details";
-  cart.textContent = JSON.stringify(result.cart || {}, null, 2);
 
-  details.append(summary, cart);
+  if (cartItems.length) {
+    const itemList = document.createElement("ul");
+    itemList.className = "cart-item-list";
+
+    cartItems.forEach((item) => {
+      const listItem = document.createElement("li");
+      const name = document.createElement("span");
+      const quantity = document.createElement("strong");
+
+      name.textContent = [item.itemName, item.itemVariant].filter(Boolean).join(" - ");
+      quantity.textContent = `x${item.quantity || 1}`;
+      listItem.append(name, quantity);
+      itemList.appendChild(listItem);
+    });
+
+    cartSummary.appendChild(itemList);
+  }
+
+  if (cart.cartTotalAmount) {
+    const total = document.createElement("p");
+    total.className = "cart-total";
+    total.textContent = `Cart total: ${cart.cartTotalAmount}`;
+    cartSummary.appendChild(total);
+  }
+
   actions.appendChild(reviewButton);
-  section.append(title, message, actions, details);
+  section.append(title, message, cartSummary, actions);
   resultsElement.appendChild(section);
 }
 
@@ -429,13 +453,21 @@ function formatProductChoice(choice) {
     parts.push(choice.packSize);
   }
   if (choice.price !== null && choice.price !== undefined) {
-    parts.push(`Price ${choice.price}`);
+    parts.push(formatInr(choice.price));
   }
   if (choice.similar) {
     parts.push("Similar item");
   }
 
   return parts.join(" - ");
+}
+
+function formatInr(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2
+  }).format(Number(value));
 }
 
 function getCheckedIngredients(list, recipe, normalizedIngredients) {

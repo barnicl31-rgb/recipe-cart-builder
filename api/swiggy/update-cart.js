@@ -43,7 +43,7 @@ module.exports = async function updateCart(request, response) {
 
     sendJson(response, 200, {
       success: true,
-      message: "Your selected products were added to the Instamart cart. Review the cart in Swiggy before checkout.",
+      message: "The Instamart cart now contains your selected products. Review the live total and availability in Swiggy before checkout.",
       cart: getToolData(cartResult)
     });
   } catch (error) {

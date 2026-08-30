@@ -12,6 +12,7 @@ Recipe Basket Builder is an MVP Chrome extension and local backend for convertin
 - `styles.css` - Popup styling.
 - `server.js` - Local API for ingredient normalization and learning.
 - `lib/swiggyMcp.js` - authenticated Swiggy Instamart MCP client using the official SDK.
+- `lib/groceryQuery.js` - production recipe-text cleanup, keyword fallbacks, and product relevance ranking.
 - `api/swiggy/` - production OAuth, product search, and cart endpoints deployed on Vercel.
 
 ## Load the Extension
@@ -108,7 +109,7 @@ The live basket journey is:
 get_addresses -> choose address -> search_products -> choose variants -> update_cart -> get_cart
 ```
 
-Search results are shown before any cart mutation. The least expensive returned option is selected initially, but the user can change or skip every ingredient. Clicking **Add selected products** replaces the Instamart cart with the reviewed selections.
+Search results are shown before any cart mutation. Recipe measurements and preparation notes are removed before search, and the best matching available variation is selected initially; price is used as a tie-breaker. The user can change or skip every ingredient. Clicking **Add selected products** replaces the Instamart cart with the reviewed selections and sends Swiggy's live `spinId` and `skuId` for each variation.
 
 The extension does not call `checkout`. Swiggy's checkout docs require explicit user confirmation after displaying the cart, address, bill details, and available payment methods.
 
@@ -127,7 +128,7 @@ get_addresses -> search_products -> update_cart -> get_cart -> checkout
 5. Connect Swiggy if this browser has not been connected yet.
 6. Click Build Basket and review the delivery address and product variants.
 7. Click Add selected products.
-8. Open the single Instamart review page and make any final cart changes before checkout.
+8. The extension opens one Instamart tab so you can review the live cart and make any final changes before checkout.
 
 ## Production Environment
 
