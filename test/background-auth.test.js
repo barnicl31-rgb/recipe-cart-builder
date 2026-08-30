@@ -16,6 +16,14 @@ test("the background auth flow saves the returned Swiggy session", async () => {
 
   assert.equal(response.success, true);
   assert.equal(harness.getStoredValue().swiggySession, "sealed-session");
+
+  const storedResponse = await harness.send("getSwiggySession");
+  assert.equal(storedResponse.success, true);
+  assert.equal(storedResponse.session, "sealed-session");
+
+  const clearResponse = await harness.send("clearSwiggySession");
+  assert.equal(clearResponse.success, true);
+  assert.equal(harness.getStoredValue(), undefined);
 });
 
 test("the background auth flow rejects an unexpected return address", async () => {
@@ -59,6 +67,12 @@ function createBackgroundHarness(extensionId, finalUrl) {
         local: {
           async set(value) {
             storedValue = value;
+          },
+          async get() {
+            return storedValue || {};
+          },
+          async remove() {
+            storedValue = undefined;
           }
         }
       }
@@ -69,8 +83,11 @@ function createBackgroundHarness(extensionId, finalUrl) {
 
   return {
     connect() {
+      return this.send("connectSwiggy");
+    },
+    send(type) {
       return new Promise((resolve) => {
-        const staysOpen = messageListener({ type: "connectSwiggy" }, {}, resolve);
+        const staysOpen = messageListener({ type }, {}, resolve);
         assert.equal(staysOpen, true);
       });
     },

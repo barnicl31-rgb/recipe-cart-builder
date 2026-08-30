@@ -7,7 +7,7 @@ Recipe Basket Builder is an MVP Chrome extension and local backend for convertin
 - `manifest.json` - Chrome extension configuration.
 - `popup.html` - Popup UI.
 - `popup.js` - Popup behavior, checklist controls, and Swiggy basket review.
-- `background.js` - persistent Chrome identity handoff for Swiggy authentication.
+- `background.js` - persistent Chrome identity handoff and encrypted session storage for Swiggy authentication.
 - `content.js` - Page scanner for JSON-LD recipe data or selected text.
 - `styles.css` - Popup styling.
 - `server.js` - Local API for ingredient normalization and learning.

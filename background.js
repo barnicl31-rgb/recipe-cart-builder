@@ -1,22 +1,43 @@
 const SWIGGY_API_BASE_URL = "https://recipe-basket-builder.vercel.app";
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "connectSwiggy") {
+  const supportedMessages = new Set([
+    "connectSwiggy",
+    "getSwiggySession",
+    "clearSwiggySession"
+  ]);
+
+  if (!supportedMessages.has(message?.type)) {
     return false;
   }
 
-  connectSwiggy()
-    .then(() => sendResponse({ success: true }))
+  handleMessage(message)
+    .then(sendResponse)
     .catch((error) => {
-      console.error("Could not connect Swiggy:", error);
+      console.error("Could not complete Swiggy session operation:", error);
       sendResponse({
         success: false,
-        message: "Swiggy connection was not completed. Please try again."
+        message: "Recipe Basket Builder could not access its saved Swiggy session. Reload the extension and try again."
       });
     });
 
   return true;
 });
+
+async function handleMessage(message) {
+  if (message.type === "connectSwiggy") {
+    await connectSwiggy();
+    return { success: true };
+  }
+
+  if (message.type === "getSwiggySession") {
+    const stored = await chrome.storage.local.get("swiggySession");
+    return { success: true, session: stored.swiggySession || "" };
+  }
+
+  await chrome.storage.local.remove("swiggySession");
+  return { success: true };
+}
 
 async function connectSwiggy() {
   const connectUrl = `${SWIGGY_API_BASE_URL}/api/swiggy/connect?extension_id=${encodeURIComponent(chrome.runtime.id)}`;

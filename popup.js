@@ -40,9 +40,13 @@ connectSwiggyButton.addEventListener("click", async () => {
 });
 
 disconnectSwiggyButton.addEventListener("click", async () => {
-  await chrome.storage.local.remove("swiggySession");
-  setSwiggyConnection(false, "Swiggy not connected");
-  setStatus("Swiggy was disconnected from this extension.");
+  try {
+    await clearSwiggySession();
+    setSwiggyConnection(false, "Swiggy not connected");
+    setStatus("Swiggy was disconnected from this extension.");
+  } catch (error) {
+    setStatus(error.message);
+  }
 });
 
 extractButton.addEventListener("click", async () => {
@@ -72,18 +76,19 @@ extractButton.addEventListener("click", async () => {
 });
 
 async function refreshSwiggyStatus() {
-  const session = await getSwiggySession();
-
-  if (!session) {
-    setSwiggyConnection(false, "Swiggy not connected");
-    return;
-  }
-
   try {
+    const session = await getSwiggySession();
+
+    if (!session) {
+      setSwiggyConnection(false, "Swiggy not connected");
+      return;
+    }
+
     const result = await swiggyFetch("/api/swiggy/status");
     setSwiggyConnection(Boolean(result.connected), result.connected ? "Swiggy connected" : "Swiggy not connected");
   } catch (error) {
-    setSwiggyConnection(false, "Reconnect Swiggy");
+    setSwiggyConnection(false, "Reload extension");
+    setStatus(error.message || "Reload Recipe Basket Builder and try again.");
   }
 }
 
@@ -466,7 +471,7 @@ async function swiggyFetch(path, options = {}) {
   const result = await response.json().catch(() => ({}));
 
   if (response.status === 401) {
-    await chrome.storage.local.remove("swiggySession");
+    await clearSwiggySession();
     setSwiggyConnection(false, "Reconnect Swiggy");
   }
 
@@ -478,8 +483,21 @@ async function swiggyFetch(path, options = {}) {
 }
 
 async function getSwiggySession() {
-  const stored = await chrome.storage.local.get("swiggySession");
-  return stored.swiggySession || "";
+  const result = await chrome.runtime.sendMessage({ type: "getSwiggySession" });
+
+  if (!result?.success) {
+    throw new Error(result?.message || "Reload Recipe Basket Builder and try again.");
+  }
+
+  return result.session || "";
+}
+
+async function clearSwiggySession() {
+  const result = await chrome.runtime.sendMessage({ type: "clearSwiggySession" });
+
+  if (!result?.success) {
+    throw new Error(result?.message || "Reload Recipe Basket Builder and try again.");
+  }
 }
 
 function setAllCheckboxes(container, isChecked) {

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Recipe Basket Builder",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Extract recipe ingredients from pages and prepare them for grocery basket building.",
   "permissions": ["activeTab", "identity", "scripting", "storage"],
   "host_permissions": [
