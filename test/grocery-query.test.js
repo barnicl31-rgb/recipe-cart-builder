@@ -15,7 +15,9 @@ test("recipe lines become concise grocery search terms", () => {
     ["1 teaspoon kosher salt", "salt"],
     ["0.5 cup sliced fresh mushrooms", "mushroom"],
     ["1 (10.5 ounce) can beef broth", "beef broth"],
-    ["500 g / 1 lb lamb mince ((ground lamb, or beef) (Note 1))", "lamb mince"]
+    ["500 g / 1 lb lamb mince ((ground lamb, or beef) (Note 1))", "lamb mince"],
+    ["1 (1.5-quart) container chocolate ice cream", "chocolate ice cream"],
+    ["1 (16-ounce) container frozen whipped topping, thawed", "whipped cream"]
   ]);
 
   for (const [original, expected] of examples) {
@@ -27,6 +29,19 @@ test("search queries include controlled fallbacks without recipe measurements", 
   assert.deepEqual(
     buildGrocerySearchQueries({ original: "1 tsp ground cumin" }),
     ["cumin powder", "cumin"]
+  );
+
+  assert.deepEqual(
+    buildGrocerySearchQueries({
+      grocery_search_term: "cream",
+      original: "1 (1.5-quart) container chocolate ice cream"
+    }),
+    ["chocolate ice cream", "ice cream", "cream"]
+  );
+
+  assert.deepEqual(
+    buildGrocerySearchQueries({ original: "1 (16-ounce) container frozen whipped topping, thawed" }),
+    ["whipping cream", "whipped cream", "cream"]
   );
 });
 
