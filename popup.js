@@ -1,6 +1,7 @@
 const extractButton = document.getElementById("extractButton");
 const connectSwiggyButton = document.getElementById("connectSwiggyButton");
 const disconnectSwiggyButton = document.getElementById("disconnectSwiggyButton");
+const testInstamartButton = document.getElementById("testInstamartButton");
 const swiggyConnectionDot = document.getElementById("swiggyConnectionDot");
 const swiggyConnectionText = document.getElementById("swiggyConnectionText");
 const statusElement = document.getElementById("status");
@@ -46,6 +47,30 @@ disconnectSwiggyButton.addEventListener("click", async () => {
     setStatus("Swiggy was disconnected from this extension.");
   } catch (error) {
     setStatus(error.message);
+  }
+});
+
+testInstamartButton.addEventListener("click", async () => {
+  testInstamartButton.disabled = true;
+  testInstamartButton.textContent = "Loading addresses...";
+  resultsElement.innerHTML = "";
+  setStatus("Loading your saved Swiggy addresses...");
+
+  try {
+    const addressResult = await swiggyFetch("/api/swiggy/addresses");
+    const addresses = addressResult.addresses || [];
+
+    if (!addresses.length) {
+      throw new Error("No saved Swiggy address was found.");
+    }
+
+    renderInstamartTest(addresses);
+    setStatus("Choose an address, then run the live milk search.");
+  } catch (error) {
+    setStatus(error.message);
+  } finally {
+    testInstamartButton.disabled = false;
+    testInstamartButton.textContent = "Test Instamart";
   }
 });
 
@@ -99,6 +124,133 @@ function setSwiggyConnection(connected, message) {
   swiggyConnectionDot.classList.toggle("disconnected", !connected);
   connectSwiggyButton.hidden = connected;
   disconnectSwiggyButton.hidden = !connected;
+  testInstamartButton.hidden = !connected;
+}
+
+function renderInstamartTest(addresses) {
+  const section = document.createElement("section");
+  const title = document.createElement("h2");
+  const addressLabel = document.createElement("label");
+  const addressSelect = document.createElement("select");
+  const searchButton = document.createElement("button");
+  const output = document.createElement("div");
+
+  section.className = "product-review smoke-test";
+  title.textContent = "Live Instamart test";
+  addressLabel.className = "field-label";
+  addressLabel.append("Delivery address", addressSelect);
+  searchButton.type = "button";
+  searchButton.className = "basket-button";
+  searchButton.textContent = "Search milk";
+  output.className = "smoke-test-output";
+
+  addresses.forEach((address) => {
+    const option = document.createElement("option");
+    option.value = address.id;
+    option.textContent = `${address.label}: ${address.display}`;
+    addressSelect.appendChild(option);
+  });
+
+  addressSelect.addEventListener("change", () => {
+    output.innerHTML = "";
+    setStatus("Run the milk search for the newly selected address.");
+  });
+
+  searchButton.addEventListener("click", async () => {
+    searchButton.disabled = true;
+    searchButton.textContent = "Searching...";
+    output.innerHTML = "";
+    setStatus("Searching Swiggy Instamart for milk...");
+
+    try {
+      const searchResult = await swiggyFetch("/api/swiggy/search-products", {
+        method: "POST",
+        body: JSON.stringify({
+          addressId: addressSelect.value,
+          ingredients: [{
+            original: "milk",
+            item: "milk",
+            grocery_search_term: "milk"
+          }]
+        })
+      });
+      const match = searchResult.matches?.[0];
+
+      renderInstamartTestResult(output, addressSelect.value, match);
+    } catch (error) {
+      const message = document.createElement("p");
+      message.className = "smoke-status failed";
+      message.textContent = error.message;
+      output.appendChild(message);
+      setStatus("The live Instamart search failed.");
+    } finally {
+      searchButton.disabled = false;
+      searchButton.textContent = "Search milk";
+    }
+  });
+
+  section.append(title, addressLabel, searchButton, output);
+  resultsElement.appendChild(section);
+}
+
+function renderInstamartTestResult(output, addressId, match) {
+  const choices = match?.choices || [];
+  const message = document.createElement("p");
+
+  output.innerHTML = "";
+
+  if (!choices.length) {
+    message.className = "smoke-status failed";
+    message.textContent = match?.reason || "Swiggy returned no milk products for this address.";
+    output.appendChild(message);
+    setStatus("Swiggy returned no products for the basic milk search.");
+    return;
+  }
+
+  const productSelect = document.createElement("select");
+  const cartButton = document.createElement("button");
+  const warning = document.createElement("small");
+
+  message.className = "smoke-status passed";
+  message.textContent = `Live search passed: ${choices.length} milk product${choices.length === 1 ? "" : "s"} returned.`;
+
+  choices.forEach((choice, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = formatProductChoice(choice);
+    productSelect.appendChild(option);
+  });
+
+  cartButton.type = "button";
+  cartButton.className = "basket-button";
+  cartButton.textContent = "Create one-item test cart";
+  warning.className = "cart-warning";
+  warning.textContent = "This replaces the current Instamart cart with the selected test item.";
+
+  cartButton.addEventListener("click", async () => {
+    const choice = choices[Number(productSelect.value)];
+    cartButton.disabled = true;
+    cartButton.textContent = "Updating cart...";
+
+    try {
+      const result = await updateInstamartCart(addressId, [{
+        spinId: choice.spinId,
+        skuId: choice.skuId,
+        quantity: 1
+      }]);
+      renderCartResult(result);
+      await chrome.tabs.create({ url: INSTAMART_URL });
+      setStatus("The one-item test cart is ready, and Swiggy was opened for review.");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      cartButton.disabled = false;
+      cartButton.textContent = "Create one-item test cart";
+    }
+  });
+
+  output.append(message, productSelect, warning, cartButton);
+  setStatus("The basic Swiggy search works. You can now test the cart handoff.");
 }
 
 async function renderExtractedData(data) {
@@ -379,13 +531,7 @@ function renderProductReview(matches, addresses, addressId, ingredients) {
     addButton.textContent = "Updating cart...";
 
     try {
-      const result = await swiggyFetch("/api/swiggy/update-cart", {
-        method: "POST",
-        body: JSON.stringify({
-          selectedAddressId: addressSelect.value,
-          items
-        })
-      });
+      const result = await updateInstamartCart(addressSelect.value, items);
       renderCartResult(result);
       await chrome.tabs.create({ url: INSTAMART_URL });
       setStatus("Instamart cart updated and opened in one Swiggy tab for review.");
@@ -399,6 +545,13 @@ function renderProductReview(matches, addresses, addressId, ingredients) {
 
   section.append(title, addressLabel, choiceList, addButton);
   resultsElement.appendChild(section);
+}
+
+function updateInstamartCart(selectedAddressId, items) {
+  return swiggyFetch("/api/swiggy/update-cart", {
+    method: "POST",
+    body: JSON.stringify({ selectedAddressId, items })
+  });
 }
 
 function renderCartResult(result) {
