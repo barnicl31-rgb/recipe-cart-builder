@@ -31,21 +31,21 @@ module.exports = async function diagnoseAddress(request, response) {
 
     const instamart = await createInstamartClient(session.accessToken);
     let milkSearch;
-    let addressCatalogue;
+    let goToItems;
 
     try {
       milkSearch = await callDiagnosticTool(instamart, "search_products", {
         addressId,
         query: "milk"
       }, "milk");
-      addressCatalogue = await callDiagnosticTool(instamart, "your_go_to_items", {
+      goToItems = await callDiagnosticTool(instamart, "your_go_to_items", {
         addressId
       }, "");
     } finally {
       await instamart.close();
     }
 
-    const assessment = assessAddressCatalogue(milkSearch, addressCatalogue);
+    const assessment = assessAddressCatalogue(milkSearch, goToItems);
 
     sendJson(response, 200, {
       success: true,
@@ -54,7 +54,7 @@ module.exports = async function diagnoseAddress(request, response) {
       assessment: assessment.code,
       message: assessment.message,
       search: milkSearch,
-      addressCatalogue
+      goToItems
     });
   } catch (error) {
     setExtensionCors(request, response);

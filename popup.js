@@ -198,15 +198,15 @@ function renderInstamartTestResult(output, addressId, diagnostic) {
     message.textContent = diagnostic?.message || "Swiggy returned no milk products for this address.";
     output.appendChild(message);
 
-    if (diagnostic?.addressCatalogue?.choices?.length) {
+    if (diagnostic?.goToItems?.choices?.length) {
       const catalogueSample = document.createElement("small");
-      const sampleNames = diagnostic.addressCatalogue.choices
+      const sampleNames = diagnostic.goToItems.choices
         .slice(0, 3)
         .map((choice) => choice.productName)
         .join(", ");
 
       catalogueSample.className = "diagnostic-detail";
-      catalogueSample.textContent = `Address catalogue sample: ${sampleNames}`;
+      catalogueSample.textContent = `Available go-to items: ${sampleNames}`;
       output.appendChild(catalogueSample);
     }
 
@@ -261,12 +261,12 @@ function renderInstamartTestResult(output, addressId, diagnostic) {
 }
 
 function getDiagnosticStatus(assessment) {
-  if (assessment === "search_empty_catalogue_working") {
-    return "The address resolves correctly; Swiggy product search is returning the empty result.";
+  if (assessment === "search_empty_go_to_items_present") {
+    return "The address can resolve Instamart products; Swiggy's milk search is returning the empty result.";
   }
 
-  if (assessment === "address_catalogue_empty") {
-    return "Swiggy MCP is not resolving an Instamart catalogue for this saved address ID.";
+  if (assessment === "search_and_go_to_empty") {
+    return "Swiggy returned no milk results or go-to items for this saved address ID; the check is inconclusive.";
   }
 
   if (assessment === "catalogue_unavailable") {

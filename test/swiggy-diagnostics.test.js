@@ -19,13 +19,13 @@ test("address diagnostics distinguish a working milk search", () => {
   assert.equal(assessment.code, "search_working");
 });
 
-test("address diagnostics separate catalogue serviceability from empty search", () => {
+test("address diagnostics separate available go-to items from empty search", () => {
   const assessment = assessAddressCatalogue(
     emptyResult,
     { ...emptyResult, choices: [{ spinId: "usual-1" }] }
   );
 
-  assert.equal(assessment.code, "search_empty_catalogue_working");
+  assert.equal(assessment.code, "search_empty_go_to_items_present");
 });
 
 test("address diagnostics identify unavailable catalogue records", () => {
@@ -37,8 +37,8 @@ test("address diagnostics identify unavailable catalogue records", () => {
   assert.equal(assessment.code, "catalogue_unavailable");
 });
 
-test("address diagnostics identify a completely empty address catalogue", () => {
+test("address diagnostics report an empty search and empty go-to items", () => {
   const assessment = assessAddressCatalogue(emptyResult, emptyResult);
 
-  assert.equal(assessment.code, "address_catalogue_empty");
+  assert.equal(assessment.code, "search_and_go_to_empty");
 });

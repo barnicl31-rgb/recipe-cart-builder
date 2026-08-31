@@ -1,6 +1,6 @@
 {
   "name": "recipe-basket-builder",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Chrome extension and local API for extracting and normalizing recipe ingredients.",
   "scripts": {
