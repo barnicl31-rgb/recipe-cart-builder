@@ -163,20 +163,14 @@ function renderInstamartTest(addresses) {
     setStatus("Searching Swiggy Instamart for milk...");
 
     try {
-      const searchResult = await swiggyFetch("/api/swiggy/search-products", {
+      const diagnosticResult = await swiggyFetch("/api/swiggy/address-diagnostics", {
         method: "POST",
         body: JSON.stringify({
-          addressId: addressSelect.value,
-          ingredients: [{
-            original: "milk",
-            item: "milk",
-            grocery_search_term: "milk"
-          }]
+          addressId: addressSelect.value
         })
       });
-      const match = searchResult.matches?.[0];
 
-      renderInstamartTestResult(output, addressSelect.value, match);
+      renderInstamartTestResult(output, addressSelect.value, diagnosticResult);
     } catch (error) {
       const message = document.createElement("p");
       message.className = "smoke-status failed";
@@ -193,17 +187,30 @@ function renderInstamartTest(addresses) {
   resultsElement.appendChild(section);
 }
 
-function renderInstamartTestResult(output, addressId, match) {
-  const choices = match?.choices || [];
+function renderInstamartTestResult(output, addressId, diagnostic) {
+  const choices = diagnostic?.search?.choices || [];
   const message = document.createElement("p");
 
   output.innerHTML = "";
 
   if (!choices.length) {
     message.className = "smoke-status failed";
-    message.textContent = match?.reason || "Swiggy returned no milk products for this address.";
+    message.textContent = diagnostic?.message || "Swiggy returned no milk products for this address.";
     output.appendChild(message);
-    setStatus("Swiggy returned no products for the basic milk search.");
+
+    if (diagnostic?.addressCatalogue?.choices?.length) {
+      const catalogueSample = document.createElement("small");
+      const sampleNames = diagnostic.addressCatalogue.choices
+        .slice(0, 3)
+        .map((choice) => choice.productName)
+        .join(", ");
+
+      catalogueSample.className = "diagnostic-detail";
+      catalogueSample.textContent = `Address catalogue sample: ${sampleNames}`;
+      output.appendChild(catalogueSample);
+    }
+
+    setStatus(getDiagnosticStatus(diagnostic?.assessment));
     return;
   }
 
@@ -251,6 +258,22 @@ function renderInstamartTestResult(output, addressId, match) {
 
   output.append(message, productSelect, warning, cartButton);
   setStatus("The basic Swiggy search works. You can now test the cart handoff.");
+}
+
+function getDiagnosticStatus(assessment) {
+  if (assessment === "search_empty_catalogue_working") {
+    return "The address resolves correctly; Swiggy product search is returning the empty result.";
+  }
+
+  if (assessment === "address_catalogue_empty") {
+    return "Swiggy MCP is not resolving an Instamart catalogue for this saved address ID.";
+  }
+
+  if (assessment === "catalogue_unavailable") {
+    return "Swiggy found catalogue records, but they are unavailable for this address.";
+  }
+
+  return "The live Instamart address check failed.";
 }
 
 async function renderExtractedData(data) {

@@ -247,6 +247,11 @@ input[type="number"] {
   line-height: 1.4;
 }
 
+.diagnostic-detail {
+  color: #52606d;
+  line-height: 1.4;
+}
+
 .cart-actions {
   display: grid;
   grid-template-columns: 1fr;
