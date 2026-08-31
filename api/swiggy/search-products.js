@@ -2,8 +2,16 @@ const { readJsonBody, sendJson, setExtensionCors } = require("../../lib/http");
 const { buildGrocerySearchQueries, rankProductChoices } = require("../../lib/groceryQuery");
 const { createInstamartClient, extractProductChoices } = require("../../lib/swiggyMcp");
 const { readSwiggySession } = require("../../lib/swiggySession");
+const {
+  createSwiggyTrace,
+  logSwiggyTrace,
+  summarizeProductResult,
+  summarizeSwiggyError
+} = require("../../lib/swiggyTrace");
 
 module.exports = async function searchProducts(request, response) {
+  let trace;
+
   if (request.method === "OPTIONS") {
     setExtensionCors(request, response);
     response.statusCode = 204;
@@ -29,11 +37,16 @@ module.exports = async function searchProducts(request, response) {
       return;
     }
 
+    trace = createSwiggyTrace(addressId);
+    logSwiggyTrace("info", "product_search_started", trace, {
+      ingredientCount: ingredients.length
+    });
+
     const matches = [];
     const instamart = await createInstamartClient(session.accessToken);
 
     try {
-      for (const ingredient of ingredients) {
+      for (const [ingredientIndex, ingredient] of ingredients.entries()) {
         const queries = buildGrocerySearchQueries(ingredient);
 
         if (!queries.length) {
@@ -47,12 +60,24 @@ module.exports = async function searchProducts(request, response) {
         let unavailableCount = 0;
         let swiggyMessage = "";
 
-        for (const query of queries) {
+        for (const [queryIndex, query] of queries.entries()) {
           const result = await instamart.callTool("search_products", {
             addressId,
             query: query.slice(0, 120)
           });
           const choices = extractProductChoices(result);
+
+          logSwiggyTrace("info", "product_search_query_result", trace, {
+            ingredientIndex,
+            queryIndex,
+            result: summarizeProductResult(result),
+            normalized: {
+              availableProducts: choices.products.length,
+              similarProducts: choices.similarProducts.length,
+              unavailableProducts: choices.unavailableProducts.length
+            }
+          });
+
           unavailableCount += choices.unavailableProducts.length;
           swiggyMessage ||= choices.message;
 
@@ -88,10 +113,19 @@ module.exports = async function searchProducts(request, response) {
       await instamart.close();
     }
 
-    sendJson(response, 200, { success: true, addressId, matches });
+    logSwiggyTrace("info", "product_search_completed", trace, {
+      ingredientCount: matches.length,
+      ingredientsWithMatches: matches.filter((match) => match.choices.length).length
+    });
+    sendJson(response, 200, { success: true, addressId, traceId: trace.traceId, matches });
   } catch (error) {
+    logSwiggyTrace("error", "product_search_failed", trace, summarizeSwiggyError(error));
     setExtensionCors(request, response);
-    sendJson(response, error.status || 502, { success: false, message: error.message });
+    sendJson(response, error.status || 502, {
+      success: false,
+      message: error.message,
+      traceId: trace?.traceId || null
+    });
   }
 };
 

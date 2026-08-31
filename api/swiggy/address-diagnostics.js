@@ -3,8 +3,16 @@ const { rankProductChoices } = require("../../lib/groceryQuery");
 const { assessAddressCatalogue } = require("../../lib/swiggyDiagnostics");
 const { createInstamartClient, extractProductChoices } = require("../../lib/swiggyMcp");
 const { readSwiggySession } = require("../../lib/swiggySession");
+const {
+  createSwiggyTrace,
+  logSwiggyTrace,
+  summarizeProductResult,
+  summarizeSwiggyError
+} = require("../../lib/swiggyTrace");
 
 module.exports = async function diagnoseAddress(request, response) {
+  let trace;
+
   if (request.method === "OPTIONS") {
     setExtensionCors(request, response);
     response.statusCode = 204;
@@ -29,6 +37,7 @@ module.exports = async function diagnoseAddress(request, response) {
       return;
     }
 
+    trace = createSwiggyTrace(addressId);
     const instamart = await createInstamartClient(session.accessToken);
     let milkSearch;
     let goToItems;
@@ -47,8 +56,15 @@ module.exports = async function diagnoseAddress(request, response) {
 
     const assessment = assessAddressCatalogue(milkSearch, goToItems);
 
+    logSwiggyTrace("info", "address_diagnostic_completed", trace, {
+      assessment: assessment.code,
+      milkSearch: milkSearch.rawSummary,
+      goToItems: goToItems.rawSummary
+    });
+
     sendJson(response, 200, {
       success: true,
+      traceId: trace.traceId,
       addressId,
       query: "milk",
       assessment: assessment.code,
@@ -57,8 +73,13 @@ module.exports = async function diagnoseAddress(request, response) {
       goToItems
     });
   } catch (error) {
+    logSwiggyTrace("error", "address_diagnostic_failed", trace, summarizeSwiggyError(error));
     setExtensionCors(request, response);
-    sendJson(response, error.status || 502, { success: false, message: error.message });
+    sendJson(response, error.status || 502, {
+      success: false,
+      message: error.message,
+      traceId: trace?.traceId || null
+    });
   }
 };
 
@@ -75,14 +96,16 @@ async function callDiagnosticTool(instamart, tool, args, query) {
       choices: deduplicateChoices(available).slice(0, 12),
       unavailableCount: choices.unavailableProducts.length,
       message: choices.message || "",
-      error: ""
+      error: "",
+      rawSummary: summarizeProductResult(result)
     };
   } catch (error) {
     return {
       choices: [],
       unavailableCount: 0,
       message: "",
-      error: error.message || `${tool} failed.`
+      error: error.message || `${tool} failed.`,
+      rawSummary: null
     };
   }
 }

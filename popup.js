@@ -198,6 +198,10 @@ function renderInstamartTestResult(output, addressId, diagnostic) {
     message.textContent = diagnostic?.message || "Swiggy returned no milk products for this address.";
     output.appendChild(message);
 
+    if (diagnostic?.traceId) {
+      output.appendChild(createTraceReference(diagnostic.traceId));
+    }
+
     if (diagnostic?.goToItems?.choices?.length) {
       const catalogueSample = document.createElement("small");
       const sampleNames = diagnostic.goToItems.choices
@@ -434,11 +438,17 @@ async function searchAndRenderProducts(ingredients, addresses, addressId) {
     body: JSON.stringify({ addressId, ingredients })
   });
 
-  renderProductReview(searchResult.matches || [], addresses, addressId, ingredients);
+  renderProductReview(
+    searchResult.matches || [],
+    addresses,
+    addressId,
+    ingredients,
+    searchResult.traceId
+  );
   setStatus("Review the suggested products before adding them to the Instamart cart.");
 }
 
-function renderProductReview(matches, addresses, addressId, ingredients) {
+function renderProductReview(matches, addresses, addressId, ingredients, traceId) {
   resultsElement.querySelector(".product-review")?.remove();
   resultsElement.querySelector(".swiggy-result")?.remove();
 
@@ -566,8 +576,21 @@ function renderProductReview(matches, addresses, addressId, ingredients) {
     }
   });
 
-  section.append(title, addressLabel, choiceList, addButton);
+  section.append(title, addressLabel, choiceList);
+
+  if (traceId && matches.some((match) => !match.choices.length)) {
+    section.appendChild(createTraceReference(traceId));
+  }
+
+  section.appendChild(addButton);
   resultsElement.appendChild(section);
+}
+
+function createTraceReference(traceId) {
+  const reference = document.createElement("small");
+  reference.className = "diagnostic-detail";
+  reference.textContent = `Search reference: ${traceId}`;
+  return reference;
 }
 
 function updateInstamartCart(selectedAddressId, items) {
